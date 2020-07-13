@@ -33,5 +33,5 @@ type BannerLayerProperties struct {
 
 // BannerRepositoryInterface ...
 type BannerRepositoryInterface interface {
-	Save(bannerToDB *BannerToDB) restError.RestError
+	Save(bannerToDB *BannerToDB) (int64, restError.RestError)
 }

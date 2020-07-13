@@ -28,11 +28,13 @@ func (s *bannerService) CreateBanner(r models.BannerRepositoryInterface, b model
 		Layers: layersJSONStr,
 	}
 
-	if err := r.Save(bannerToDB); err != nil {
-		return nil, err
+	bannerID, saveErr := r.Save(bannerToDB)
+
+	if saveErr != nil {
+		return nil, saveErr
 	}
 
-	b.ID = (*bannerToDB).ID
+	b.ID = bannerID
 
 	return &b, nil
 }
