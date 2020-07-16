@@ -3,6 +3,7 @@ package controllers_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -37,6 +38,20 @@ func performRequest(r http.Handler, method, path string, body io.Reader) *httpte
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	return w
+}
+
+type BannerServiceMock struct {
+	mock.Mock
+}
+
+func (s *BannerServiceMock) CreateBanner(r models.BannerRepositoryInterface, b models.Banner) (*models.Banner, restError.RestError) {
+	args := s.Called(r, b)
+
+	if args.Get(0) == nil {
+		return nil, args.Get(1).(restError.RestError)
+	}
+
+	return args.Get(0).(*models.Banner), nil
 }
 
 func TestCreateBanner(t *testing.T) {
@@ -91,5 +106,62 @@ func TestCreateBanner(t *testing.T) {
 		layersVal, layersExists := resBody["layers"]
 		assert.True(t, layersExists)
 		assert.Equal(t, expectedResBody["layers"], layersVal)
+	}
+}
+
+func TestCreateBannerFailDueToDatabaseSaveError(t *testing.T) {
+	bannerServiceMock := new(BannerServiceMock)
+	bannerServiceMock.On("CreateBanner", mock.Anything).Return(nil, restError.NewInternalServerError("error when trying to save banner", errors.New("database error")))
+
+	bannerRepoMock := new(BannerRepositoryMock)
+	bannerRepoMock.On("Save", mock.Anything).Return(int64(0), restError.NewInternalServerError("error when trying to save banner", errors.New("database error")))
+
+	reqBodyJSONStr := []byte(`{
+		"layers": [
+			{
+				"type": "image",
+				"properties": {
+					"x": 0,
+					"y": 0,
+					"width": 200,
+					"height": 200,
+					"url": "https://test-image.com"
+				}
+			}
+		]
+	}`)
+
+	expectedResBody := gin.H{
+		"message": "error when trying to save banner",
+		"status":  float64(500),
+		"error":   "internal_server_error",
+		"causes":  []interface{}{"database error"},
+	}
+
+	router := app.SetupRouter(bannerRepoMock)
+
+	w := performRequest(router, "POST", "/banners", bytes.NewBuffer(reqBodyJSONStr))
+
+	var resBody map[string]interface{}
+	err := json.Unmarshal([]byte(w.Body.String()), &resBody)
+
+	if err == nil {
+		assert.Equal(t, w.Code, http.StatusInternalServerError)
+
+		messageVal, messageExists := resBody["message"]
+		assert.True(t, messageExists)
+		assert.Equal(t, expectedResBody["message"], messageVal)
+
+		statusVal, statusExists := resBody["status"]
+		assert.True(t, statusExists)
+		assert.Equal(t, expectedResBody["status"], statusVal)
+
+		errorVal, errorExists := resBody["error"]
+		assert.True(t, errorExists)
+		assert.Equal(t, expectedResBody["error"], errorVal)
+
+		causesVal, causesExists := resBody["causes"]
+		assert.True(t, causesExists)
+		assert.Equal(t, expectedResBody["causes"], causesVal)
 	}
 }
