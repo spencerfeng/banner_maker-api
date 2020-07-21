@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/spencerfeng/banner_maker-api/src/services"
+
 	"github.com/gin-gonic/gin"
 	"github.com/spencerfeng/banner_maker-api/src/controllers"
 	"github.com/spencerfeng/banner_maker-api/src/database/sqldb"
@@ -21,12 +23,14 @@ var (
 )
 
 // SetupRouter ...
-func SetupRouter(bannerRepository models.BannerRepositoryInterface) *gin.Engine {
+func SetupRouter(bannerRepository models.BannerRepositoryInterface, imageService services.ImageService) *gin.Engine {
 	router := gin.Default()
 
 	bannerBaseHandler := controllers.NewBannerBaseHandler(bannerRepository)
+	baseImageHandler := controllers.NewBaseImageHandler(imageService)
 
 	router.POST("/banners", bannerBaseHandler.Create)
+	router.POST("/images", baseImageHandler.Upload)
 
 	return router
 }
@@ -41,7 +45,13 @@ func StartApplication() {
 	// initialise repositories
 	bannerRepository := repositories.NewBannerRepository(db)
 
-	router := SetupRouter(bannerRepository)
+	// initialise services
+	imageService, imageServiceErr := services.NewImageService()
+	if imageServiceErr != nil {
+		log.Panic(imageServiceErr)
+	}
+
+	router := SetupRouter(bannerRepository, imageService)
 
 	router.Run(":8082")
 }
